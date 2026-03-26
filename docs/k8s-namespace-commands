@@ -1,0 +1,28 @@
+# List all namespaces
+kubectl get namespaces
+
+# Get all resources in namespace
+kubectl get all -n development
+
+# Get all resources across all namespaces
+kubectl get all -A
+
+# Delete entire namespace (deletes everything inside!)
+kubectl delete namespace development
+
+# Describe namespace
+kubectl describe namespace development
+```
+
+---
+
+## Namespace vs Docker Compose Environments
+```
+Docker Compose              Kubernetes Namespaces
+──────────────              ─────────────────────
+docker-compose-staging.yml  namespace: staging
+docker-compose-prod.yml     namespace: production
+.env.staging                Secret in staging namespace
+.env.production             Secret in production namespace
+port 8001 for staging       NodePort per namespace
+port 8000 for production    or Ingress rules
