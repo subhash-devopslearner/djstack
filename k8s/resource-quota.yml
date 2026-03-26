@@ -1,0 +1,14 @@
+# resource-quota.yml
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: development-quota
+  namespace: development
+spec:
+  hard:
+    pods: "10"                  # max 10 pods
+    requests.cpu: "2"           # max 2 CPU cores
+    requests.memory: "2Gi"      # max 2GB memory
+    limits.cpu: "4"             # max 4 CPU cores
+    limits.memory: "4Gi"        # max 4GB memory
+    
