@@ -1,0 +1,25 @@
+# namespaces.yml
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: development
+  labels:
+    env: development
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    env: staging
+
+---
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: production
+  labels:
+    env: production
