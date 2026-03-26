@@ -13,6 +13,18 @@ spec:
       labels:
         app: django
     spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ['sh', '-c',
+           'until pg_isready -h postgres-service -U $DB_USER;
+            do echo "Waiting for PostgreSQL...";
+            sleep 2; 
+            done;'
+          ]
+          envFrom:
+            - secretRef:
+                name: django-secret             
       containers:
       - name: django
         image: subhashdevopslearner/djstack-web:latest
