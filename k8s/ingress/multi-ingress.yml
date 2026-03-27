@@ -1,0 +1,43 @@
+# multi-ingress.yml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: django-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+spec:
+  rules:
+    - host: myapp.local
+      http:
+        paths:
+
+          # Django app
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: django-service
+                port:
+                  number: 8000
+
+          # API service
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api-service
+                port:
+                  number: 3000
+
+          # Admin service
+          - path: /admin
+            pathType: Prefix
+            backend:
+              service:
+                name: admin-service
+                port:
+                  number: 8001
+
+#http://myapp.local/        → Django ✅
+#http://myapp.local/api     → API ✅
+#http://myapp.local/admin   → Admin ✅

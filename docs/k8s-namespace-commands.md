@@ -12,9 +12,6 @@ kubectl delete namespace development
 
 # Describe namespace
 kubectl describe namespace development
-```
-
----
 
 ## Namespace vs Docker Compose Environments
 ```
@@ -26,3 +23,4 @@ docker-compose-prod.yml     namespace: production
 .env.production             Secret in production namespace
 port 8001 for staging       NodePort per namespace
 port 8000 for production    or Ingress rules
+```
