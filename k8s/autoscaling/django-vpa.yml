@@ -1,0 +1,21 @@
+# django-vpa.yml
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: django-vpa
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: django-deployment
+  updatePolicy:
+    updateMode: "Auto"          # automatically update resources
+  resourcePolicy:
+    containerPolicies:
+      - containerName: django
+        minAllowed:
+          cpu: "100m"
+          memory: "128Mi"
+        maxAllowed:
+          cpu: "1"
+          memory: "1Gi"

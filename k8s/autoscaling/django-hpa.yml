@@ -1,0 +1,30 @@
+# django-hpa.yml
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: django-hpa
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: django-deployment      # which deployment to scale
+
+  minReplicas: 2                 # minimum pods always running
+  maxReplicas: 10                # maximum pods allowed
+
+  metrics:
+    # Scale based on CPU
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70  # scale up if CPU > 70%
+
+    # Scale based on Memory
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80  # scale up if memory > 80%
