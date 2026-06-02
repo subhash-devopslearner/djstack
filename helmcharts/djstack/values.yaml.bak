@@ -1,0 +1,57 @@
+django:
+  image: subhashdevopslearner/djstack-web
+  tag: "latest"
+  replicas: 2
+  workers: 2
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30001
+  resources:
+    requests:
+      memory: "128Mi"
+      cpu: "250m"
+    limits:
+      memory: "256Mi"
+      cpu: "500m"
+  config:
+    debug: "False"
+    dbHost: "postgres-service"
+    dbPort: "5432"
+    allowedHosts: "localhost,127.0.0.1,minikube.local,django.local"
+    environment: "production"
+  secret:
+    secretKey: "django-testing-qtek#6qdie2xmqks60oi#1%6eiefmazw1m&cwn+0-nyk=h%uoa"
+    dbName: "postgres"
+    dbUser: "postgres"
+    dbPassword: "postgres"
+
+postgres:
+  image: postgres
+  tag: "15"
+  port: 5432
+  storage: "1Gi"
+  storageClass: ""
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+
+nginx:
+  image: nginx
+  tag: "alpine"
+  replicas: 1
+  service:
+    type: ClusterIP
+    port: 80
+
+media:
+  storage: "5Gi"
+  storageClass: ""
+
+ingress:
+  className: nginx
+  host: django.local

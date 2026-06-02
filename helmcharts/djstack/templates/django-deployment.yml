@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-deployment
+spec:
+  replicas: {{ .Values.django.replicas | quote }}
+  selector:
+    matchLabels:
+      app: django
+  template:
+    metadata:
+      labels:
+        app: django
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:{{ .Values.postgres.tag | quote }}
+          command: ['sh', '-c',
+           'until pg_isready -h postgres-service -U $DB_USER;
+            do echo "Waiting for PostgreSQL...";
+            sleep 2; 
+            done;'
+          ]
+          envFrom:
+            - secretRef:
+                name: django-secret             
+      containers:
+      - name: django
+        image: {{ .Values.django.image | quote }}:{{ .Values.django.tag | quote }}
+        ports:
+          - containerPort: 8000
+        command: ["gunicorn"]
+        args: ["djstack.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", {{ .Values.django.workers | quote }}]
+        envFrom:
+          - configMapRef:
+              name: django-config
+          - secretRef:
+              name: django-secret
+        resources:
+          requests:
+            memory: {{ .Values.django.resources.requests.memory | quote }}
+            cpu: {{ .Values.django.resources.requests.cpu | quote }}
+          limits:
+            memory: {{ .Values.django.resources.limits.memory | quote }}
+            cpu: {{ .Values.django.resources.limits.cpu | quote }}

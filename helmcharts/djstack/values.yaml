@@ -1,0 +1,47 @@
+# values.yaml
+django:
+  replicas: "2"
+  image: "subhashdevopslearner/djstack-web"
+  tag: "latest"
+  workers: "2"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"
+  
+  service:
+    port: "8000"
+    targetPort: "8000"
+    type: "NodePort"
+    nodePort: "30001"
+
+  config:
+    debug: "False"
+    dbHost: "postgres-service"
+    dbPort: "5432"
+    allowedHosts: "localhost,127.0.0.1"
+    environment: "production"
+
+  secret:
+    secretKey: "your-secret-key-here"
+    dbName: "postgres"
+    dbUser: "postgres"
+    dbPassword: "postgres" 
+
+pvc:
+  storage: "1Gi"
+
+postgres:
+  image: "postgres"
+  tag: "15"
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "250m"
+    limits:
+      memory: "512Mi"
+      cpu: "500m"  
+  port: "5432"
