@@ -87,8 +87,8 @@ DATABASES = {
         "NAME": os.getenv('DB_NAME','mydatabase'),
         "USER": os.getenv("DB_USER", "mydatabaseuser"),
         "PASSWORD": os.getenv("DB_PASSWORD", "mypassword"),
-        "HOST": "db",
-        "PORT": "5432",
+        "HOST": os.getenv("DB_HOST", "db"),
+        "PORT": os.getenv("DB_PORT", "5432"),
     }
 }
 
@@ -130,3 +130,8 @@ USE_TZ = True
 STATIC_URL = 'static/'
 
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+MEDIA_URL = 'media/'
+
+MEDIA_ROOT = BASE_DIR / 'media'
+
