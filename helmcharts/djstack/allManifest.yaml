@@ -1,0 +1,295 @@
+---
+# Source: djstack/templates/secret.yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: django-secret
+type: Opaque
+data:
+  DJANGO_SECRET_KEY: "ZGphbmdvLXRlc3RpbmctcXRlayM2cWRpZTJ4bXFrczYwb2kjMSU2ZWllZm1hencxbSZjd24rMC1ueWs9aCV1b2E="
+  DB_NAME: "cG9zdGdyZXM="
+  DB_USER: "cG9zdGdyZXM="
+  DB_PASSWORD: "cG9zdGdyZXM="
+
+---
+# Source: djstack/templates/configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: django-config
+data:
+  DEBUG: "True"
+  DB_HOST: "postgres-service"
+  DB_PORT: "5432"
+  DJANGO_ALLOWED_HOSTS: "*"
+  ENVIRONMENT: "development"
+---
+# Source: djstack/templates/nginx-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+data:
+  default.conf: |    
+    upstream django {
+        server 127.0.0.1:8000;
+    }
+
+    server {
+        listen 80;
+        server_name djstack-app.local;
+
+        location / {
+          proxy_pass http://django;
+          proxy_set_header Host $host;
+          proxy_set_header X-Real-IP $remote_addr;
+          proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+          proxy_set_header X-Forwarded-Proto $scheme;
+          proxy_redirect off;
+        }
+
+        location /static/ {
+            alias /app/staticfiles/;
+        }
+
+        location /media/ {
+            alias /app/media/;
+        }
+    }
+
+---
+# Source: djstack/templates/media-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: media-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "5Gi"
+
+---
+# Source: djstack/templates/postgres-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-pvc
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: "1Gi"
+
+---
+# Source: djstack/templates/django-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: django-service
+spec:
+  type: ClusterIP
+  selector:
+    app: django
+  ports:
+    - protocol: TCP
+      port: 80  
+      targetPort: 80
+      
+---
+# Source: djstack/templates/postgres-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-service
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432
+
+---
+# Source: djstack/templates/django-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-deployment
+  labels:
+    app: django  
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: django
+  template:
+    metadata:
+      labels:
+        app: django
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: postgres:15
+          command: ['sh', '-c',
+            'until pg_isready -h postgres-service -U \$DB_USER;
+            do echo "Waiting for PostgreSQL...";
+            sleep 2;
+            done;']
+          envFrom:
+            - secretRef:
+                name: django-secret
+
+        - name: django-migrate
+          image: subhashdevopslearner/djstack-web:1.0.0
+          command: ['python', 'manage.py', 'migrate', '--noinput']
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+
+        - name: collectstatic
+          image: subhashdevopslearner/djstack-web:1.0.0
+          command: ['python', 'manage.py', 'collectstatic', '--noinput']
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+
+      containers:      
+        - name: django
+          image: subhashdevopslearner/djstack-web:1.0.0
+          ports:
+            - containerPort: 8000
+          command: ["gunicorn"]
+          args: ["djstack.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/media
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "250m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+        
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/media
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"        
+
+      volumes:
+        - name: static-files
+          emptyDir: {}
+        - name: media-files
+          persistentVolumeClaim:
+            claimName: media-pvc
+        - name: nginx-config
+          configMap:
+            name: nginx-config
+
+---
+# Source: djstack/templates/postgres-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-deployment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: postgres:15
+        ports:
+          - containerPort: 5432
+        env:
+          - name: POSTGRES_DB
+            valueFrom:
+              secretKeyRef:
+                name: django-secret
+                key: DB_NAME
+          - name: POSTGRES_USER
+            valueFrom:
+              secretKeyRef:
+                name: django-secret
+                key: DB_USER
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: django-secret
+                key: DB_PASSWORD
+        volumeMounts:
+          - name: postgres-storage
+            mountPath: /var/lib/postgresql/data
+            subPath: postgres
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+        - name: postgres-storage
+          persistentVolumeClaim:
+            claimName: postgres-pvc
+
+---
+# Source: djstack/templates/ingress.yaml
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: django-ingress
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: djstack-app.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: django-service
+                port:
+                  number: 80

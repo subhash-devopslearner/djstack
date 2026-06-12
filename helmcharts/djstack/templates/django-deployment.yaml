@@ -1,0 +1,103 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: django-deployment
+  labels:
+    app: django  
+spec:
+  replicas: {{ .Values.django.replicas }}
+  selector:
+    matchLabels:
+      app: django
+  template:
+    metadata:
+      labels:
+        app: django
+    spec:
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image }}:{{ .Values.postgres.tag }}
+          command: ['sh', '-c',
+            'until pg_isready -h {{ .Values.django.config.dbHost }} -U \$DB_USER;
+            do echo "Waiting for PostgreSQL...";
+            sleep 2;
+            done;']
+          envFrom:
+            - secretRef:
+                name: django-secret
+
+        - name: django-migrate
+          image: {{ .Values.django.image }}:{{ .Values.django.tag }}
+          command: ['python', 'manage.py', 'migrate', '--noinput']
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+
+        - name: collectstatic
+          image: {{ .Values.django.image }}:{{ .Values.django.tag }}
+          command: ['python', 'manage.py', 'collectstatic', '--noinput']
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+
+      containers:      
+        - name: django
+          image: {{ .Values.django.image }}:{{ .Values.django.tag }}
+          ports:
+            - containerPort: 8000
+          command: ["gunicorn"]
+          args: ["djstack.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", {{ .Values.django.workers | quote }}]
+          envFrom:
+            - configMapRef:
+                name: django-config
+            - secretRef:
+                name: django-secret
+          volumeMounts:
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/media
+          resources:
+            requests:
+              memory: {{ .Values.django.resources.requests.memory | quote }}
+              cpu: {{ .Values.django.resources.requests.cpu | quote }}
+            limits:
+              memory: {{ .Values.django.resources.limits.memory | quote }}
+              cpu: {{ .Values.django.resources.limits.cpu | quote }}
+        
+        - name: nginx
+          image: {{ .Values.django.nginx.image }}:{{ .Values.django.nginx.tag }}
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+            - name: static-files
+              mountPath: /app/staticfiles
+            - name: media-files
+              mountPath: /app/media
+          resources:
+            requests:
+              memory: {{ .Values.django.nginx.resources.requests.memory | quote }}
+              cpu: {{ .Values.django.nginx.resources.requests.cpu | quote }}
+            limits:
+              memory: {{ .Values.django.nginx.resources.limits.memory | quote }}
+              cpu: {{ .Values.django.nginx.resources.limits.cpu | quote }}        
+
+      volumes:
+        - name: static-files
+          emptyDir: {}
+        - name: media-files
+          persistentVolumeClaim:
+            claimName: media-pvc
+        - name: nginx-config
+          configMap:
+            name: nginx-config
