@@ -1,5 +1,5 @@
 django:
-  replicas: 2
+  replicas: 3
   image: subhashdevopslearner/djstack-web
   tag: "1.0.0"  
   workers: "2"
