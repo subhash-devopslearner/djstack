@@ -71,6 +71,17 @@
     --self-heal
     ```
 
+    ```
+    If want to get image and tag from values.yaml, 
+    then you should not put these in above command
+
+    If done already, 
+    then use following command to unset the override parameters of ArgoCD
+
+    argocd app unset djstack --parameter django.image
+    argocd app unset djstack --parameter django.tag
+    ```
+
 ## Check ArgoCD app status
     ```argocd app get djstack```
 
