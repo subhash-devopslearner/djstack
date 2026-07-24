@@ -4,20 +4,28 @@ on:
   push:
     branches:
       - main
+    paths:
+      - 'azure-infra-core/**'
+      - 'azure-infra-apps/**'
+      - 'Dockerfile'
+      - 'requirements.txt'
+      - '**.py'
+      - '.github/workflows/deploy.yml'
+
+  workflow_dispatch:
 
 permissions:
-  id-token: write  # Required for Azure OIDC login
+  id-token: write
   contents: read
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
-      # 1. Checkout repository
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Azure OIDC Authentication
+      # 1. OIDC Azure Login
       - name: Azure Login
         uses: azure/login@v2
         with:
@@ -25,15 +33,21 @@ jobs:
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # 3. Setup Terraform CLI
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: "1.7.0"
 
-      # 4. STEP 1: Provision Core Infrastructure (RG, ACR, Key Vault)
+      # 2. Terraform Core Layer
       - name: Terraform Core (Apply)
         env:
+          # 🔑 THESE THREE LINES TELL TERRAFORM HOW TO AUTHENTICATE WITH OIDC
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: "true"
+          
+          # Your existing variables
           TF_VAR_django_secret_key: ${{ secrets.DJANGO_SECRET_KEY }}
           TF_VAR_postgres_db_password: ${{ secrets.POSTGRES_DB_PASSWORD }}
         run: |
@@ -41,22 +55,26 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
-      # STEP 2: Build & Push Images to Private Registry (ACR)
+      # 3. Build & Push Docker Images
       - name: ACR Login & Image Build/Push
         run: |
           az acr login --name subhashdevopsregistry
           
-          # 1. Build and Push Django
           docker build -t subhashdevopsregistry.azurecr.io/django-app:v1 -f Dockerfile .
           docker push subhashdevopsregistry.azurecr.io/django-app:v1
 
-          # 2. Pull, Tag, and Push Postgres (Avoids Docker Hub rate limits)
           docker pull postgres:15-alpine
           docker tag postgres:15-alpine subhashdevopsregistry.azurecr.io/postgres:15-alpine
           docker push subhashdevopsregistry.azurecr.io/postgres:15-alpine
 
-      # 6. STEP 3: Provision Application Layer (ACI Container Group)
+      # 4. Terraform Apps Layer
       - name: Terraform Apps (Apply)
+        env:
+          # 🔑 PASS OIDC AUTH TO THE APPS LAYER AS WELL
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          ARM_USE_OIDC: "true"
         run: |
           cd azure-infra-apps
           terraform init
