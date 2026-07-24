@@ -1,3 +1,7 @@
+# ==============================================================================
+# 1. TERRAFORM & PROVIDER CONFIGURATION
+# ==============================================================================
+
 terraform {
   required_providers {
     azurerm = {
@@ -5,42 +9,45 @@ terraform {
       version = "~> 4.0"
     }
   }
+
+  # Remote State Storage
+  backend "azurerm" {
+    resource_group_name  = "subhash-mgmt-rg"
+    storage_account_name = "subhashtfstate2026"
+    container_name       = "tfstate"
+    key                  = "core.terraform.tfstate"
+  }
 }
 
 provider "azurerm" {
   features {}
 }
 
-# 1. Fetch current subscription ID dynamically
-data "azurerm_subscription" "current" {}
+# ==============================================================================
+# 2. DATA SOURCES & IMPORT BLOCKS
+# ==============================================================================
 
-# 🚀 2. IMPORT BLOCK: Tells Terraform to adopt the existing Resource Group into remote state
+# Context data for the current subscription & runner context
+data "azurerm_subscription" "current" {}
+data "azurerm_client_config" "current" {}
+
+# Adopts the pre-existing Resource Group into remote state
 import {
   to = azurerm_resource_group.student_rg
   id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/resourceGroups/subhash-student-resources"
 }
 
-# 3. Your existing resource block
+# ==============================================================================
+# 3. CORE INFRASTRUCTURE RESOURCES
+# ==============================================================================
+
+# Core Resource Group
 resource "azurerm_resource_group" "student_rg" {
   name     = "subhash-student-resources"
   location = "East US"
 }
 
-# 🚀 THIS BLOCK DIRECTS TERRAFORM TO USE YOUR BLOB STORAGE FOR STATE
-  backend "azurerm" {
-    resource_group_name  = "subhash-mgmt-rg"
-    storage_account_name = "subhashtfstate2026"
-    container_name       = "tfstate"
-    key                  = "core.terraform.tfstate" # Separate state file for core
-  }
-
-# 1. Create resource group
-resource "azurerm_resource_group" "student_rg" {
-  name     = "subhash-student-resources"
-  location = "East US"
-}
-
-# 2. Create resource container registry
+# Azure Container Registry (ACR)
 resource "azurerm_container_registry" "acr" {
   name                = "subhashdevopsregistry"
   resource_group_name = azurerm_resource_group.student_rg.name
@@ -49,10 +56,17 @@ resource "azurerm_container_registry" "acr" {
   admin_enabled       = true
 }
 
-# 3. Fetch current logged-in user context data
-data "azurerm_client_config" "current" {}
+# User-Assigned Managed Identity (for Django App)
+resource "azurerm_user_assigned_identity" "django_identity" {
+  name                = "django-app-identity"
+  resource_group_name = azurerm_resource_group.student_rg.name
+  location            = azurerm_resource_group.student_rg.location
+}
 
-# 4. Create the Key Vault Instance
+# ==============================================================================
+# 4. SECURITY & SECRETS (KEY VAULT)
+# ==============================================================================
+
 resource "azurerm_key_vault" "vault" {
   name                        = "subhashdevops-vault"
   location                    = azurerm_resource_group.student_rg.location
@@ -63,7 +77,7 @@ resource "azurerm_key_vault" "vault" {
   purge_protection_enabled    = false
   sku_name                    = "standard"
 
-  # Grant your terminal identity rights to add secrets
+  # Policy A: Runner / Admin permissions (To write/manage secrets)
   access_policy {
     tenant_id = data.azurerm_client_config.current.tenant_id
     object_id = data.azurerm_client_config.current.object_id
@@ -72,20 +86,34 @@ resource "azurerm_key_vault" "vault" {
       "Get", "List", "Set", "Delete", "Purge"
     ]
   }
+
+  # Policy B: Managed Identity permissions (To read secrets at runtime)
+  access_policy {
+    tenant_id = azurerm_user_assigned_identity.django_identity.tenant_id
+    object_id = azurerm_user_assigned_identity.django_identity.principal_id
+
+    secret_permissions = [
+      "Get", "List"
+    ]
+  }
 }
 
-# 5. Securely seed your sensitive variables into the vault
+# Key Vault Secret Entries
 resource "azurerm_key_vault_secret" "django_secret" {
-  name         = "django-secret-key"  
+  name         = "django-secret-key"
   value        = var.django_secret_key
   key_vault_id = azurerm_key_vault.vault.id
 }
 
 resource "azurerm_key_vault_secret" "db_password" {
-  name         = "postgres-db-password"  
+  name         = "postgres-db-password"
   value        = var.postgres_db_password
   key_vault_id = azurerm_key_vault.vault.id
 }
+
+# ==============================================================================
+# 5. OUTPUTS
+# ==============================================================================
 
 output "acr_login_server" {
   value = azurerm_container_registry.acr.login_server
