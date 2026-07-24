@@ -41,12 +41,19 @@ jobs:
           terraform init
           terraform apply -auto-approve
 
-      # 5. STEP 2: Build and Push Custom Application Image
+      # STEP 2: Build & Push Images to Private Registry (ACR)
       - name: ACR Login & Image Build/Push
         run: |
           az acr login --name subhashdevopsregistry
-          docker build -t subhashdevopsregistry.azurecr.io/django-app:v1 .
+          
+          # 1. Build and Push Django
+          docker build -t subhashdevopsregistry.azurecr.io/django-app:v1 -f Dockerfile .
           docker push subhashdevopsregistry.azurecr.io/django-app:v1
+
+          # 2. Pull, Tag, and Push Postgres (Avoids Docker Hub rate limits)
+          docker pull postgres:15-alpine
+          docker tag postgres:15-alpine subhashdevopsregistry.azurecr.io/postgres:15-alpine
+          docker push subhashdevopsregistry.azurecr.io/postgres:15-alpine
 
       # 6. STEP 3: Provision Application Layer (ACI Container Group)
       - name: Terraform Apps (Apply)

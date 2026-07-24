@@ -11,6 +11,14 @@ provider "azurerm" {
   features {}
 }
 
+# 🚀 THIS BLOCK DIRECTS TERRAFORM TO USE YOUR BLOB STORAGE FOR STATE
+  backend "azurerm" {
+    resource_group_name  = "subhash-mgmt-rg"
+    storage_account_name = "subhashtfstate2026"
+    container_name       = "tfstate"
+    key                  = "core.terraform.tfstate" # Separate state file for core
+  }
+
 # 1. Create resource group
 resource "azurerm_resource_group" "student_rg" {
   name     = "subhash-student-resources"

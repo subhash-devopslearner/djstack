@@ -11,6 +11,14 @@ provider "azurerm" {
   features {}
 }
 
+# 🚀 APP LAYER BACKEND
+  backend "azurerm" {
+    resource_group_name  = "subhash-mgmt-rg"
+    storage_account_name = "subhashtfstate2026"
+    container_name       = "tfstate"
+    key                  = "apps.terraform.tfstate" # Separate state file for apps
+}
+
 # 1. READ existing infrastructure
 data "azurerm_resource_group" "existing_rg" {
   name = "subhash-student-resources"
