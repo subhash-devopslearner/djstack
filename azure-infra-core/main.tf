@@ -11,6 +11,21 @@ provider "azurerm" {
   features {}
 }
 
+# 1. Fetch current subscription ID dynamically
+data "azurerm_subscription" "current" {}
+
+# 🚀 2. IMPORT BLOCK: Tells Terraform to adopt the existing Resource Group into remote state
+import {
+  to = azurerm_resource_group.student_rg
+  id = "/subscriptions/${data.azurerm_subscription.current.subscription_id}/resourceGroups/subhash-student-resources"
+}
+
+# 3. Your existing resource block
+resource "azurerm_resource_group" "student_rg" {
+  name     = "subhash-student-resources"
+  location = "East US"
+}
+
 # 🚀 THIS BLOCK DIRECTS TERRAFORM TO USE YOUR BLOB STORAGE FOR STATE
   backend "azurerm" {
     resource_group_name  = "subhash-mgmt-rg"
